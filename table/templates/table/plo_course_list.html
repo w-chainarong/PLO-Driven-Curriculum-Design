@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Course List for {{ semester_str }}</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 6px 12px;
+            text-align: center;
+            vertical-align: top;
+        }
+        th { background-color: #eee; }
+        .readonly-cell { background-color: #f9f9f9; }
+        .header-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin: 16px 0 8px;
+            text-align: center;
+        }
+        .footer { margin-top: 16px; text-align: center; }
+        .btn-close, .btn-save {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 6px;
+            font-size: 16px;
+            margin: 10px;
+        }
+        .btn-close { background-color: #e53935; }
+        textarea {
+            width: 98%;
+            min-height: 60px;
+            resize: vertical;
+            padding: 6px;
+            font-size: 14px;
+            margin-top: 4px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+
+<body>
+{% if messages %}
+    {% for message in messages %}
+        <div style="color: #256029; background: #f0f9eb; border: 1px solid #b4e5c1; border-radius: 8px; padding: 8px 18px; margin-bottom: 12px; font-size: 16px;">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="header-title">Courses in {{ semester_str }}</div>
+<div class="header-title">From category: {{ row.name }}</div>
+
+<form method="POST" action="{% url 'save_plo_course_list' curriculum_id=row.curriculum.id row_id=row.id semester=semester %}">
+    {% csrf_token %}
+    <table>
+        <thead>
+            <tr>
+                <th>Course Code</th>
+                <th>Course Name</th>
+                <th>Credits</th>
+                <th>PLO</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for course in courses %}
+            <tr>
+                <td class="readonly-cell">{{ course.course_code }}</td>
+                <td class="readonly-cell">{{ course.course_name }}</td>
+                <td class="readonly-cell">{{ course.credits }}</td>
+                <td class="readonly-cell">{{ course.plo }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4">No courses found for this PLO in {{ semester_str }}.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2" style="text-align: right;"><strong>Total Credits</strong></td>
+                <td colspan="2">({{ total_credits }}, {{ percent_of_total }}%)</td>
+            </tr>
+
+            {% if total_credits > 0 %}
+            <tr>
+                <td><strong>YLO {{ semester_str }}-{{ ylo_number }}</strong></td>
+                <td colspan="3">
+                    {% if access_mode == 'edit' %}
+                        <textarea name="summary_text" id="summary_text">{% if ylo_summary %}{{ ylo_summary.summary_text }}{% endif %}</textarea>
+                    {% else %}
+                        <div style="margin-top: 8px; padding: 10px; background: #f9f9f9; border: 1px solid #ccc;">
+                            {{ ylo_summary.summary_text|default:"<i>No YLO data</i>"|safe }}
+                        </div>
+                    {% endif %}
+                </td>
+            </tr>
+
+            {% if access_mode == 'edit' %}
+            <tr>
+                <td colspan="4" style="text-align: center;">
+                    <button type="submit" class="btn-save">💾 Save YLO</button>
+                </td>
+            </tr>
+            {% endif %}
+            {% endif %}
+        </tfoot>
+    </table>
+</form>
+
+<div class="footer">
+    <button type="button" class="btn-close" onclick="window.close()">🔙 Close this window</button>
+</div>
+
+</body>
+</html>

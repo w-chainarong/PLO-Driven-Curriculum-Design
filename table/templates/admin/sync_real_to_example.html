@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <h1>ซิงค์ข้อมูลหลักสูตร (real → example)</h1>
+  <form method="post">{% csrf_token %}
+    <p>คลิกปุ่มด้านล่างเพื่อคัดลอกข้อมูลจากฐาน real.sqlite3 ไปยัง example.sqlite3</p>
+    <button type="submit" class="default">🔄 ดำเนินการ Sync</button>
+  </form>
+  {% if status %}
+    <p style="margin-top: 20px; color: {% if "✅" in status %}green{% else %}red{% endif %};">
+      {{ status }}
+    </p>
+  {% endif %}
+{% endblock %}

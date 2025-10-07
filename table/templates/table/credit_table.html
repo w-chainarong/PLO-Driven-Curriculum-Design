@@ -1,0 +1,497 @@
+{% load custom_filters %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Credit Analysis Table</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #444; padding: 6px; text-align: center; }
+        th { background-color: #eee; }
+        input[type="number"] { width: 40px; text-align: center; }
+        .wide-input { width: 100%; box-sizing: border-box; }
+        .total-cell { background-color: #f9f9f9; font-weight: bold; }
+        textarea.rich-text { width: 100%; height: 50px; resize: both; }
+
+        .delete-btn, .add-btn, .save-btn, .reset-btn, .close-btn {
+            padding: 4px 8px; cursor: pointer; border: none; color: white; margin: 4px;
+        }
+        .delete-btn { background-color: #f44336; }
+        .add-btn    { background-color: #4CAF50; }
+        .save-btn   { background-color: #2196F3; }
+        .reset-btn  { background-color: orange; }
+        .close-btn  { background-color: #888888; }
+
+        .plo-reset-btn {
+            background-color: white; color: black; border: 1px solid #ccc;
+            padding: 4px 8px; cursor: pointer; margin: 4px;
+        }
+        .link-btn { margin-right: 4px; background: none; border: none; font-size: 14px; cursor: pointer; }
+        .no-underline { text-decoration: none; font-size: 16px; padding: 2px; cursor: pointer; }
+    </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const updateTotals = () => {
+        const columnSums = new Array(8).fill(0);
+        let grandTotal = 0;
+
+        // Sum rows for General, Core, and Free Elective (exclude PLOs)
+        const includedRows = Array.from(document.querySelectorAll('#core-rows-table tbody tr'))
+            .filter(row =>
+                row.id.startsWith('general-row-') ||
+                row.id.startsWith('row-') ||
+                row.id === 'free-elective-row'
+            );
+
+        includedRows.forEach(row => {
+            const inputs = row.querySelectorAll('input[type="number"]');
+            let rowTotal = 0;
+            inputs.forEach((input, index) => {
+                const value = parseInt(input.value) || 0;
+                rowTotal += value;
+                if (index < 8) columnSums[index] += value;
+            });
+            const totalCell = row.querySelector('.total-cell');
+            if (totalCell) totalCell.textContent = rowTotal;
+            grandTotal += rowTotal;
+        });
+
+        // Update summary row
+        document.querySelectorAll('#summary-row .summary-column').forEach((cell, i) => {
+            cell.textContent = columnSums[i];
+        });
+        const grandTotalCell = document.getElementById('grand-total');
+        if (grandTotalCell) grandTotalCell.textContent = grandTotal;
+
+        // Update PLO rows: show "(X cr., Y%)"
+        const ploRows = Array.from(document.querySelectorAll('#core-rows-table tbody tr[id^="plo-row-"]'));
+        ploRows.forEach(row => {
+            const inputs = row.querySelectorAll('input[type="number"]');
+            let rowTotal = 0;
+            inputs.forEach((input) => {
+                const value = parseInt(input.value) || 0;
+                rowTotal += value;
+            });
+
+            const totalCell = row.querySelector('.total-cell');
+            const ploTotalCredits = rowTotal;
+            const percent = (grandTotal > 0) ? ((ploTotalCredits / grandTotal) * 100).toFixed(2) : "0.00";
+
+            if (totalCell) totalCell.textContent = `(${ploTotalCredits} cr., ${percent}%)`;
+        });
+
+        // Update final PLO summary row
+        const ploSummaryRow = document.querySelector('#core-rows-table tr:last-child td.total-cell');
+        if (ploSummaryRow) {
+            const ploRows = Array.from(document.querySelectorAll('#core-rows-table tbody tr[id^="plo-row-"]'));
+            let totalPLOCredits = 0;
+            ploRows.forEach(row => {
+                const inputs = row.querySelectorAll('input[type="number"]');
+                inputs.forEach(input => {
+                    totalPLOCredits += parseInt(input.value) || 0;
+                });
+            });
+            const percentTotal = (grandTotal > 0) ? ((totalPLOCredits / grandTotal) * 100).toFixed(2) : "0.00";
+            ploSummaryRow.textContent = `(${totalPLOCredits} cr., ${percentTotal}%)`;
+        }
+    };
+
+    window.insertRow = function () {
+        const table = document.getElementById('core-rows-table');
+        const rowCount = document.querySelectorAll('tr[id^="row-"]').length;
+
+        // Insert before Free Elective row
+        const freeRow = document.getElementById('free-elective-row');
+        const insertIndex = freeRow ? freeRow.rowIndex : document.getElementById('summary-row').rowIndex;
+
+        const newRow = table.insertRow(insertIndex);
+        newRow.id = 'row-' + rowCount;
+        newRow.innerHTML = `<td><button type="button" class="delete-btn" onclick="deleteRow(${rowCount})">-</button></td>
+            <td><input type="text" name="core_name_new_${rowCount}" class="wide-input" placeholder="Course group"></td>`;
+
+        for (let i = 0; i < 8; i++) {
+            newRow.innerHTML += `<td>
+                <input type="number" name="core_credit_new_${rowCount}_${i}" value="0" min="0" oninput="updateTotals()">
+            </td>`;
+        }
+        newRow.innerHTML += `<td class="total-cell">0</td>`;
+        updateTotals();
+    };
+
+    window.insertGeneralRow = function () {
+        const table = document.getElementById('core-rows-table');
+        const rowCount = document.querySelectorAll('tr[id^="general-row-"]').length;
+        const insertIndex = 2 + rowCount; // after the General Education header row
+        const newRow = table.insertRow(insertIndex);
+        newRow.id = 'general-row-' + rowCount;
+        newRow.innerHTML = `<td><button type="button" class="delete-btn" onclick="deleteGeneralRow(${rowCount})">-</button></td>
+            <td><input type="text" name="general_name_new_${rowCount}" class="wide-input" placeholder="Course group"></td>`;
+
+        for (let i = 0; i < 8; i++) {
+            newRow.innerHTML += `<td>
+                <input type="number" name="general_credit_new_${rowCount}_${i}" value="0" min="0" oninput="updateTotals()">
+            </td>`;
+        }
+        newRow.innerHTML += `<td class="total-cell">0</td>`;
+        updateTotals();
+    };
+
+    window.deleteRow = idx => {
+        const row = document.getElementById('row-' + idx);
+        if (row) {
+            const hiddenInputs = row.querySelectorAll('input[type="hidden"]');
+            hiddenInputs.forEach(input => input.remove());
+            row.remove();
+            updateTotals();
+        }
+    };
+
+    window.deleteGeneralRow = idx => {
+        const row = document.getElementById('general-row-' + idx);
+        if (row) {
+            const hiddenInput = row.querySelector(`input[name="general_id_${idx}"]`);
+            if (hiddenInput) hiddenInput.remove();
+            row.remove();
+            updateTotals();
+        }
+    };
+
+    window.updateTotals = updateTotals;
+    updateTotals();
+});
+</script>
+</head>
+<body>
+    <!-- Backup/Restore buttons (edit mode only) -->
+    {% if access_mode == 'edit' %}
+    <div style="text-align: right; margin-bottom: 10px;">
+        <form method="POST" action="{% url 'sync_curriculum_real_to_example' curriculum_id=curriculum.id %}" style="display: inline;">
+            {% csrf_token %}
+            <button type="submit" class="save-btn" onclick="return confirm('Do you want to back up the current data to the example database?')">🔄 Backup</button>
+        </form>
+        <form method="POST" action="{% url 'sync_curriculum_example_to_real' curriculum_id=curriculum.id %}" style="display: inline;">
+            {% csrf_token %}
+            <button type="submit" class="reset-btn" onclick="return confirm('Current data will be overwritten! Do you want to restore from the example database?')">♻️ Restore</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <p style="margin: 10px 0;">
+        <a href="{% url 'curriculum_select' %}" style="text-decoration: none; font-size: 16px;">⬅️ Back to curriculum selection</a>
+    </p>
+
+    <form method="POST" action="{% url 'credit_table' curriculum_id=curriculum.id %}">
+        {% csrf_token %}
+        <div style="text-align: center; margin-bottom: 16px;">
+            <label for="curriculum_name" style="font-weight: bold; font-size: 18px;">Curriculum Name</label><br>
+            <input type="text" id="curriculum_name" name="curriculum_name" value="{{ curriculum.name }}"
+                   style="text-align: center; font-size: 18px; font-weight: bold; padding: 6px; width: 420px; margin-top: 6px;" required>
+        </div>
+        {% csrf_token %}
+
+        <table id="core-rows-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Category</th>
+                    {% for header in headers %}<th>{{ header }}</th>{% endfor %}
+                    <th>Total Credits</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- General Education header -->
+                <tr>
+                    <td><button type="button" class="add-btn" onclick="insertGeneralRow()">+</button></td>
+                    <td><strong>General Education</strong></td>
+                    {% for _ in headers %}<td></td>{% endfor %}
+                    <td></td>
+                </tr>
+
+                <!-- General rows -->
+                {% for row_id, name, credits, total in general_rows %}
+                <tr id="general-row-{{ forloop.counter0 }}">
+                    <td>
+                        <button type="button" class="delete-btn" onclick="deleteGeneralRow({{ forloop.counter0 }})">-</button>
+                    </td>
+                    <td>
+                        <input type="hidden" name="general_id_{{ forloop.counter0 }}" value="{{ row_id }}">
+                        <input type="text" name="general_name_{{ forloop.counter0 }}" value="{{ name }}" class="wide-input">
+                    </td>
+                    {% for credit in credits %}
+                    <td>
+                        <div style="display: flex; align-items: center; justify-content: center;">
+                            <button type="button" class="link-btn" title="View courses"
+                                    onclick="window.open('{% url 'course_list' curriculum_id=curriculum.id row_id=row_id semester=forloop.counter %}', '_blank')">📋</button>
+                            <input type="number"
+                                   name="general_credit_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}"
+                                   value="{{ credit }}" min="0" oninput="updateTotals()">
+                        </div>
+                    </td>
+                    {% endfor %}
+                    <td class="total-cell"></td>
+                </tr>
+                {% endfor %}
+
+                <!-- Core header -->
+                <tr>
+                    <td><button type="button" class="add-btn" onclick="insertRow()">+</button></td>
+                    <td><strong>Core Courses</strong></td>
+                    {% for _ in headers %}<td></td>{% endfor %}
+                    <td></td>
+                </tr>
+
+                <!-- Core rows -->
+                {% for row_id, name, credits, total in core_rows %}
+                <tr id="row-{{ forloop.counter0 }}">
+                    <td>
+                        <button type="button" class="delete-btn" onclick="deleteRow({{ forloop.counter0 }})">-</button>
+                    </td>
+                    <td>
+                        <input type="hidden" name="core_id_{{ forloop.counter0 }}" value="{{ row_id }}">
+                        <input type="text" name="core_name_{{ forloop.counter0 }}" value="{{ name }}" class="wide-input">
+                    </td>
+                    {% for credit in credits %}
+                    <td>
+                        <div style="display: flex; align-items: center; justify-content: center;">
+                            <button type="button" class="link-btn"
+                                    title="View courses"
+                                    onclick="window.open('{% url 'course_list' curriculum_id=curriculum.id row_id=row_id semester=forloop.counter %}', '_blank')">📋</button>
+                            <input type="number"
+                                   name="core_credit_{{ forloop.parentloop.counter0 }}_{{ forloop.counter0 }}"
+                                   value="{{ credit }}" min="0" oninput="updateTotals()">
+                        </div>
+                    </td>
+                    {% endfor %}
+                    <td class="total-cell">{{ total }}</td>
+                </tr>
+                {% endfor %}
+
+                <!-- Free Elective -->
+                <tr id="free-elective-row">
+                    <td></td>
+                    <td><strong>{{ free_elective.0 }}</strong></td>
+                    {% for credit in free_elective.1 %}
+                    <td>
+                        <button type="button" class="link-btn" title="View courses"
+                                onclick="window.open('{% url 'course_list' curriculum_id=curriculum.id row_id='free_elective' semester=forloop.counter %}', '_blank')">📋</button>
+                        <input type="number" name="{{ free_elective.0 }}_{{ forloop.counter0 }}" value="{{ credit }}" min="0" oninput="updateTotals()">
+                    </td>
+                    {% endfor %}
+                    <td class="total-cell">{{ free_elective.2 }}</td>
+                </tr>
+
+                <!-- Summary row -->
+                <tr id="summary-row">
+                    <td colspan="2" style="font-weight: bold; background-color: #ddd;">Total of All Courses</td>
+                    {% for _ in headers %}<td class="summary-column total-cell">0</td>{% endfor %}
+                    <td id="grand-total" class="total-cell">0</td>
+                </tr>
+
+                <!-- PLOs header -->
+                <tr id="plo-header-row">
+                    <td><button type="button" class="add-btn" onclick="insertPLORow()">+</button></td>
+                    <td><strong>PLOs (Competency-Based)</strong></td>
+                    {% for _ in headers %}<td></td>{% endfor %}
+                    <td></td>
+                </tr>
+
+                <!-- PLO rows -->
+                {% for row_id, name, credits, total in plo_rows %}
+                <tr id="plo-row-{{ forloop.counter0 }}">
+                    <td>
+                        <button type="button" class="delete-btn" onclick="deletePLORow({{ forloop.counter0 }})">-</button>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <label class="plo-label">PLO{{ forloop.counter }}</label>
+                            <button type="button" class="plo-reset-btn" onclick="resetTextareaSize(this)" title="Reset size">🔄</button>
+                        </div>
+                        <input type="hidden" name="plo_id_{{ forloop.counter0 }}" value="{{ row_id }}">
+                        <textarea name="plo_name_{{ forloop.counter0 }}" class="rich-text"
+                                  {% if has_saved %}readonly{% else %}oninput="lockPLOPrefix(this)"{% endif %}>{{ name }}</textarea>
+                    </td>
+
+                    {% for sem in headers|length|to_range %}
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 4px; justify-content: center;">
+                            <a href="{% url 'plo_course_list' curriculum_id=curriculum.id row_id=row_id semester=sem %}?mode={{ access_mode }}"
+                               class="no-underline" target="_blank" title="View courses">📋</a>
+                            {% with row_id_str=row_id|stringformat:'s' sem_str=sem|stringformat:'s' %}
+                                {% with key=row_id_str|add:'_'|add:sem_str %}
+                                    <input type="number" value="{{ plo_course_totals|get_item:key }}" readonly
+                                           style="width: 40px; text-align: center; background-color: #f3f3f3; border: 1px solid #ccc;">
+                                {% endwith %}
+                            {% endwith %}
+                        </div>
+                    </td>
+                    {% endfor %}
+
+                    <td class="total-cell">
+                        ({{ total }} cr., {{ plo_percentages|get_item:row_id|floatformat:2 }}%)
+                    </td>
+                </tr>
+                {% endfor %}
+
+                <!-- PLO summary -->
+                <tr style="background-color: #eef;">
+                    <td colspan="2" style="text-align: center; vertical-align: middle;">
+                        <a href="{% url 'plo_summary' curriculum.id %}" target="_blank"
+                           class="no-underline" style="margin-right: 6px; font-size: 16px;" title="View courses and CLOs linked to PLOs">📋</a>
+                        <a href="{% url 'plo_graph_from_creditrow' curriculum.id %}" target="_blank"
+                           class="no-underline" style="margin-right: 6px; font-size: 16px;" title="View PLO Credits Graph (Stacked Bar)">📊</a>
+                        <strong>Total PLO Credits</strong>
+                    </td>
+                    {% for sem in headers|length|to_range %}
+                    <td>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+                            <a href="{% url 'ylo_study_plan' curriculum_id=curriculum.id semester=sem %}?mode={{ access_mode }}" target="_blank" class="no-underline" title="View study plan">📋</a>
+                            <input type="number" value="{{ plo_semester_totals|get_item:sem }}" readonly style="width: 40px; text-align: center;">
+                        </div>
+                    </td>
+                    {% endfor %}
+                    <td class="total-cell">
+                        {% with total_plo=plo_semester_totals.values|sum_list %}
+                            {% with total_percent=plo_percentages.values|sum_list %}
+                                ({{ total_plo }} cr., {{ total_percent|floatformat:2 }}%)
+                            {% endwith %}
+                        {% endwith %}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        {% if access_mode == 'edit' %}
+        <div style="margin-top: 16px;">
+            <button type="submit" class="save-btn">📂 Save changes</button>
+        </div>
+        {% endif %}
+    </form>
+
+    {% if access_mode == 'edit' %}
+    <form method="POST" action="{% url 'reset_credit_table' curriculum_id=curriculum.id %}" style="margin-top: 10px;" onsubmit="return confirm('Are you sure you want to reset the table? This action will delete all data!')">
+        {% csrf_token %}
+        <button type="submit" class="reset-btn">♻️ Reset table</button>
+    </form>
+    {% endif %}
+
+<script>
+function resetTextareaSize(button) {
+    let parent = button.closest('td');
+    if (parent) {
+        const textarea = parent.querySelector('textarea.rich-text');
+        if (textarea) {
+            textarea.style.width = '100%';
+            textarea.style.height = '50px';
+        }
+    }
+}
+
+// Lock PLO prefix (e.g., "PLO1:") in textarea first line
+function lockPLOPrefix(textarea) {
+    const row = textarea.closest('tr');
+    const label = row?.querySelector('.plo-label');
+    if (!label) return;
+
+    const expectedPrefix = label.textContent + ':';
+    const lines = textarea.value.split('\n');
+
+    const prefixRegex = /^PLO\s*\d+\s*:?\s*/;
+    const suffix = lines[0].replace(prefixRegex, '');
+
+    lines[0] = `${expectedPrefix} ${suffix.replace(/^\s+/, '')}`;
+    textarea.value = lines.join('\n');
+}
+
+// Update PLO labels and keep user text
+function updatePLOLabels() {
+    const rows = document.querySelectorAll('tr[id^="plo-row-"]');
+    rows.forEach((row, index) => {
+        const label = row.querySelector('.plo-label');
+        const textarea = row.querySelector('textarea.rich-text');
+        const newPLO = `PLO${index + 1}`;
+
+        if (label) label.textContent = newPLO;
+
+        if (textarea) {
+            const lines = textarea.value.split('\n');
+            if (lines[0].startsWith('PLO')) {
+                const suffix = lines[0].replace(/^PLO\s*\d+\s*:?/, '').trim();
+                lines[0] = `${newPLO}: ${suffix}`.trim();
+                textarea.value = lines.join('\n');
+            } else if (textarea.value.trim() === '') {
+                textarea.value = `${newPLO}: `;
+            }
+        }
+    });
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    updatePLOLabels();
+});
+
+window.insertPLORow = function () {
+    const table = document.getElementById('core-rows-table');
+    const ploRows = document.querySelectorAll('tr[id^="plo-row-"]');
+    const rowCount = ploRows.length;
+
+    let insertIndex;
+    if (ploRows.length > 0) {
+        insertIndex = ploRows[ploRows.length - 1].rowIndex + 1;
+    } else {
+        const headerRow = document.getElementById('plo-header-row');
+        insertIndex = headerRow ? headerRow.rowIndex + 1 : table.rows.length;
+    }
+
+    const newRow = table.insertRow(insertIndex);
+    newRow.id = 'plo-row-' + rowCount;
+
+    newRow.innerHTML = `
+        <td><button type="button" class="delete-btn" onclick="deletePLORow(${rowCount})">-</button></td>
+        <td>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="plo-label">PLO${rowCount + 1}</label>
+                <button type="button" class="plo-reset-btn" onclick="location.reload();" title="Reload page">🔄</button>
+            </div>
+            <textarea name="plo_name_new_${rowCount}" class="rich-text" oninput="lockPLOPrefix(this)"></textarea>
+        </td>`;
+
+    for (let i = 0; i < 8; i++) {
+        newRow.innerHTML += `
+            <td>
+                <input type="number" name="plo_credit_new_${rowCount}_${i}" value="0" min="0" oninput="updateTotals()">
+            </td>`;
+    }
+
+    newRow.innerHTML += `<td class="total-cell">0</td>`;
+    updateTotals();
+    updatePLOLabels();
+};
+
+window.deletePLORow = function (idx) {
+    const row = document.getElementById('plo-row-' + idx);
+    if (row) row.remove();
+    updateTotals();
+    updatePLOLabels();
+};
+
+// Auto-width for curriculum name input
+document.addEventListener("DOMContentLoaded", function () {
+    const input = document.getElementById("curriculum_name");
+    const adjustWidth = () => {
+        const span = document.createElement("span");
+        span.style.visibility = "hidden";
+        span.style.position = "absolute";
+        span.style.whiteSpace = "nowrap";
+        span.style.font = window.getComputedStyle(input).font;
+        span.textContent = input.value || input.placeholder || "";
+        document.body.appendChild(span);
+        input.style.width = (span.offsetWidth + 30) + "px";
+        document.body.removeChild(span);
+    };
+    input.addEventListener("input", adjustWidth);
+    adjustWidth();
+});
+</script>
+</body>
+</html>

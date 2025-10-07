@@ -1,0 +1,180 @@
+{% load custom_filters %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>YLO-based Study Plan for {{ semester_str }}</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 8px;
+            text-align: center;
+            vertical-align: top;
+        }
+        th {
+            background-color: #eee;
+        }
+        /* Course code column */
+        .code-col {
+            width: 105px;
+            min-width: 105px;
+            max-width: 105px;
+            white-space: nowrap;
+            text-align: center;
+        }
+        .readonly-cell {
+            background-color: #f0f0f0;
+        }
+        input[type="text"], textarea {
+            width: 95%;
+            padding: 4px;
+            box-sizing: border-box;
+        }
+        .header-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .btn-save {
+            margin-top: 20px;
+            padding: 8px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            font-weight: bold;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .btn-close {
+            margin-top: 20px;
+            padding: 8px 20px;
+            background-color: #e53935;
+            color: white;
+            border: none;
+            font-weight: bold;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .ylo-section {
+            margin-top: 30px;
+            padding: 10px;
+            background: #f9f9f9;
+            border: 1px solid #ccc;
+        }
+        .ylo-section p {
+            text-align: left;
+            margin: 5px 0;
+        }
+        .icon-link {
+            text-decoration: none;
+            margin-right: 6px;
+            font-size: 18px;
+            vertical-align: middle;
+        }
+        th a {
+            text-decoration: none;
+            color: #2a3f5f;
+        }
+    </style>
+    {% if access_mode == 'edit' %}
+    <script>
+        function openKsecPopup(courseId, type) {
+            const url = `/curriculum/{{ curriculum_id }}/select-ksec/?type=${type}&semester={{ semester }}&course_id=${courseId}`;
+            const popup = window.open(url, '_blank', 'width=600,height=500');
+
+            window.receiveKsecSelection = function(courseId, type, selectedItems) {
+                const text = selectedItems.join(', ');
+                document.getElementById(`${type}_display_${courseId}`).value = text;
+                document.getElementById(`${type}_value_${courseId}`).value = text;
+            };
+        }
+    </script>
+    {% endif %}
+</head>
+<body>
+    {% if messages %}
+    <script>
+        {% for message in messages %}
+            alert("{{ message|escapejs }}");
+        {% endfor %}
+    </script>
+    {% endif %}
+
+<div class="header-title">
+    YLO-based Study Plan for {{ semester_str }}
+</div>
+
+<form method="POST" action="{% url 'save_ylo_studyplan' curriculum_id=curriculum_id semester=semester %}?mode={{ access_mode }}">
+    {% csrf_token %}
+    <table>
+        <thead>
+            <tr>
+                <th class="code-col">Course Code</th>
+                <th>Course Name</th>
+                <th>Credits</th>
+                <th><a href="{% url 'ksec_edit' curriculum_id=curriculum_id semester=semester type='K' %}" target="_blank">🔗 Knowledge</a></th>
+                <th><a href="{% url 'ksec_edit' curriculum_id=curriculum_id semester=semester type='S' %}" target="_blank">🔗 Skills</a></th>
+                <th><a href="{% url 'ksec_edit' curriculum_id=curriculum_id semester=semester type='E' %}" target="_blank">🔗 Ethics</a></th>
+                <th><a href="{% url 'ksec_edit' curriculum_id=curriculum_id semester=semester type='C' %}" target="_blank">🔗 Character</a></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for course in courses %}
+            <tr>
+                <td class="readonly-cell code-col">{{ course.course_code }}</td>
+                <td class="readonly-cell" style="text-align: left;">
+                    <a href="{% url 'clo_ksec_map' curriculum_id=curriculum_id course_id=course.id %}?from_link=1" target="_blank" class="icon-link">📋</a>
+                    {{ course.course_name }}
+                </td>
+                <td class="readonly-cell">{{ course.credits }}</td>
+                {% for type in 'KSEC' %}
+                <td>
+                    {% if access_mode == 'edit' %}
+                        <button type="button" onclick="openKsecPopup({{ course.id }}, '{{ type }}')">📋</button><br>
+                    {% endif %}
+                    <textarea id="{{ type }}_display_{{ course.id }}" readonly>{{ course|get_ksec_value:type }}</textarea>
+                    <input type="hidden" name="{{ type|lower }}_{{ course.id }}" id="{{ type }}_value_{{ course.id }}" value="{{ course|get_ksec_value:type }}">
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+
+            <tr style="background-color: #eef; font-weight: bold;">
+                <td colspan="2" style="text-align: right;">Total Credits</td>
+                <td>{{ courses|map:'credits'|sum_list }}</td>
+                <td colspan="4"></td>
+            </tr>
+        </tbody>
+    </table>
+
+    {% if access_mode == 'edit' %}
+    <div style="text-align: center;">
+        <button type="submit" class="btn-save">💾 Save</button>
+    </div>
+    {% endif %}
+</form>
+
+<!-- YLO list -->
+<div class="ylo-section">
+    <h3>YLOs in this semester</h3>
+    {% for ylo in ylo_list %}
+        <p><strong>{{ ylo.code }}:</strong> {{ ylo.summary_text|default:"<i>No YLO text</i>"|safe }}</p>
+    {% empty %}
+        <p><i>No YLO data in this semester</i></p>
+    {% endfor %}
+</div>
+
+<div style="text-align: center;">
+    <button type="button" class="btn-close" onclick="window.close()">🔙 Close this window</button>
+</div>
+
+</body>
+</html>

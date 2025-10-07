@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load custom_filters %}
+<head>
+    <meta charset="UTF-8">
+    <title>Course List</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #444; padding: 6px; text-align: center; }
+        th { background-color: #eee; }
+        input[type="text"], input[type="number"] { width: 100%; box-sizing: border-box; padding: 4px; }
+        .delete-btn, .add-btn, .save-btn, .reset-btn, .close-btn {
+            padding: 4px 8px; cursor: pointer; border: none; color: white; margin: 4px;
+        }
+        .delete-btn { background-color: #f44336; }
+        .add-btn    { background-color: #4CAF50; }
+        .save-btn   { background-color: #2196F3; }
+        .reset-btn  { background-color: orange; }
+        .close-btn {
+            background-color: #e53935; color: white; border: none; padding: 8px 14px;
+            cursor: pointer; font-weight: bold; border-radius: 6px; font-size: 16px;
+            display: block; margin: 20px auto 0;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            let courseCounter = document.querySelectorAll('#course-list tbody tr').length;
+
+            window.addCourseRow = function () {
+                const table = document.querySelector('#course-list tbody');
+                const row = table.insertRow();
+                row.id = 'course-row-' + courseCounter;
+
+                let dropdown = `<select name="plo[]">
+                        <option value="">-- Select PLO --</option>`;
+                {% for plo in plo_choices %}
+                    dropdown += `<option value="{{ plo }}">{{ plo }}</option>`;
+                {% endfor %}
+                dropdown += `</select>`;
+
+                row.innerHTML = `
+                    <td><input type="text" name="course_code[]"></td>
+                    <td><input type="text" name="course_name[]"></td>
+                    <td><input type="number" name="credits[]" min="0"></td>
+                    <td>
+                        {% if plo_choices %}${dropdown}{% else %}<input type="text" name="plo[]">{% endif %}
+                    </td>
+                    <td><button type="button" class="delete-btn" onclick="deleteCourseRow(${courseCounter})">-</button></td>
+                `;
+                courseCounter++;
+            };
+
+            window.deleteCourseRow = function (index) {
+                const row = document.getElementById('course-row-' + index);
+                const table = document.querySelector('#course-list tbody');
+                if (row && table.rows.length > 1) {
+                    row.remove();
+                }
+            };
+
+            window.closeWindow = function () {
+                window.close();
+            };
+
+            const saveForm = document.querySelector('form[action*="save"]');
+            if (saveForm) {
+                saveForm.addEventListener('submit', function () {
+                    window.onbeforeunload = null;
+                });
+            }
+
+            window.onbeforeunload = function () {
+                return "You have unsaved changes. Are you sure you want to leave this page?";
+            };
+        });
+    </script>
+</head>
+<body>
+    {% if messages %}
+    <script>
+        {% for message in messages %}
+            alert("{{ message|escapejs }}");
+        {% endfor %}
+    </script>
+    {% endif %}
+
+    {% with headers_list="Year 1/1,Year 1/2,Year 2/1,Year 2/2,Year 3/1,Year 3/2,Year 4/1,Year 4/2"|split:"," %}
+        <h2 style="text-align: center;">Courses in {{ headers_list|index:semester }}</h2>
+        <h3 style="text-align: center;">From category: {{ row.name }}</h3>
+
+        {% if plo_descriptions %}
+        <div class="plo-summary" style="text-align: left; margin: 16px;">
+            <button type="button" onclick="togglePLOs()" style="margin-bottom: 8px;">📘 Show/Hide PLOs</button>
+            <div id="plo-detail" style="display: none; padding-left: 16px;">
+                <strong>All PLOs of the curriculum:</strong>
+                <ul>
+                    {% for label, desc in plo_descriptions.items %}
+                        <li><strong>{{ label }}</strong> {{ desc|cut:label }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <script>
+            function togglePLOs() {
+                const box = document.getElementById("plo-detail");
+                box.style.display = box.style.display === "none" ? "block" : "none";
+            }
+        </script>
+        {% endif %}
+    {% endwith %}
+    
+    {% if not readonly %}
+    <form method="POST" action="{% url 'save_course_list' curriculum_id=curriculum_id row_id=row.id semester=semester %}">
+        {% csrf_token %}
+    {% endif %}
+    
+        <table id="course-list">
+            <thead>
+                <tr>
+                    <th>Course Code</th>
+                    <th>Course Name</th>
+                    <th>Credits</th>
+                    <th>PLO</th>
+                    {% if not readonly %}<th></th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for course in courses %}
+                <tr id="course-row-{{ forloop.counter0 }}">
+                    <td>
+                        {% if not readonly %}
+                            <input type="text" name="course_code[]" value="{{ course.course_code }}">
+                        {% else %}
+                            {{ course.course_code }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not readonly %}
+                            <input type="text" name="course_name[]" value="{{ course.course_name }}">
+                        {% else %}
+                            {{ course.course_name }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not readonly %}
+                            <input type="number" name="credits[]" value="{{ course.credits }}" min="0">
+                        {% else %}
+                            {{ course.credits }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not readonly %}
+                            {% if plo_choices %}
+                                <select name="plo[]">
+                                    <option value="">-- Select PLO --</option>
+                                    {% for plo in plo_choices %}
+                                        <option value="{{ plo }}" {% if course.plo == plo %}selected{% endif %}>{{ plo }}</option>
+                                    {% endfor %}
+                                </select>
+                            {% else %}
+                                <input type="text" name="plo[]" value="{{ course.plo }}">
+                            {% endif %}
+                        {% else %}
+                            {{ course.plo }}
+                        {% endif %}
+                    </td>
+                    {% if not readonly %}
+                    <td><button type="button" class="delete-btn" onclick="deleteCourseRow({{ forloop.counter0 }})">-</button></td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr><td colspan="5">No course data.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    
+        {% if not readonly %}
+        <div style="margin-top: 10px;">
+            <button type="button" class="add-btn" onclick="addCourseRow()">+ Add Course</button>
+            <button type="submit" class="save-btn">💾 Save List</button>
+        </div>
+        </form>
+    
+        <form method="POST" action="{% url 'reset_course_list' curriculum_id=curriculum_id row_id=row.id semester=semester %}" style="margin-top: 10px;" onsubmit="return confirm('Are you sure you want to reset this table? All course data will be deleted!')">
+            {% csrf_token %}
+            <button type="submit" class="reset-btn">♻️ Reset Table</button>
+        </form>
+        {% endif %}
+    
+        <div style="margin-top: 20px; text-align: center;">
+            <button type="button" class="close-btn" onclick="closeWindow()">🔙 Close this window</button>
+        </div>
+</body>
+</html>

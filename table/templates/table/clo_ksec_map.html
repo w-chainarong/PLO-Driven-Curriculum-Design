@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CLO-KSEC Mapping</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 6px;
+            text-align: center;
+        }
+        th {
+            background-color: #eee;
+        }
+        textarea, select, input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 4px;
+        }
+        .index-col {
+            width: 60px;
+        }
+        .bloom-col {
+            width: 180px;
+        }
+    
+        .delete-btn, .add-btn, .save-btn, .reset-btn, .close-btn {
+            padding: 4px 8px;
+            cursor: pointer;
+            border: none;
+            color: white;
+            margin: 4px;
+        }
+    
+        .delete-btn { background-color: #f44336; }
+        .add-btn    { background-color: #4CAF50; }
+    
+        .save-btn {
+            background-color: #2196F3;
+            color: white;
+            padding: 6px 12px;
+            border: none;
+            cursor: pointer;
+            opacity: 1;
+        }
+    
+        .save-btn:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+    
+        .reset-btn  { background-color: orange; }
+    
+        .close-btn {
+            background-color: #e53935;
+            padding: 8px 14px;
+            font-size: 16px;
+            display: block;
+            margin: 20px auto 0;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+    </style>
+    <script>
+        function lockPrefix(textarea) {
+            const prefix = "Course description: ";
+            if (!textarea.value.startsWith(prefix)) {
+                const current = textarea.value.replace(/Course description:\s*/i, '').trimStart();
+                textarea.value = prefix + current;
+            }
+            const cursorPos = textarea.selectionStart;
+            if (cursorPos < prefix.length) {
+                textarea.setSelectionRange(prefix.length, prefix.length);
+            }
+        }
+
+        function lockCLOPrefix(textarea) {
+            const row = textarea.closest('tr');
+            const label = row?.querySelector('.index-col');
+            if (!label) return;
+
+            const match = label.textContent.match(/\d+/);
+            if (!match) return;
+
+            const prefix = `CLO${match[0]}:`;
+            const lines = textarea.value.split('\n');
+            const prefixRegex = /^CLO\s*\d+\s*:?\s*/;
+            const suffix = lines[0].replace(prefixRegex, '');
+            lines[0] = `${prefix} ${suffix}`;
+            textarea.value = lines.join('\n');
+        }
+
+        function updateCLOLabels() {
+            const rows = document.querySelectorAll('tr[id^="clo-row-"]');
+            rows.forEach((row, index) => {
+                const labelCell = row.querySelector('.index-col');
+                const textarea = row.querySelector('textarea');
+                const newLabel = `CLO${index + 1}`;
+                if (labelCell) {
+                    labelCell.innerHTML = `${index + 1}<input type="hidden" name="index[]" value="${index + 1}">`;
+                }
+                if (textarea) {
+                    const lines = textarea.value.split('\n');
+                    const prefixRegex = /^CLO\s*\d+\s*:?\s*/;
+                    const suffix = lines[0].replace(prefixRegex, '').trim();
+                    lines[0] = `${newLabel}: ${suffix}`;
+                    textarea.value = lines.join('\n');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            let rowCounter = document.querySelectorAll('#clo-table tbody tr').length;
+
+            window.addCLORow = function () {
+                const table = document.querySelector('#clo-table tbody');
+                const row = table.insertRow();
+                row.id = 'clo-row-' + rowCounter;
+
+                row.innerHTML = `
+                    <td class="index-col">${rowCounter + 1}<input type="hidden" name="index[]" value="${rowCounter + 1}"></td>
+                    <td class="bloom-col">
+                        <select name="bloom[]">
+                            <option value="">-</option>
+                            {% for domain, levels in bloom_domains.items %}
+                                <optgroup label="{{ domain }}">
+                                    {% for level, verbs in levels %}
+                                        <option value="{{ level }}" {% if clo.bloom == level %}selected{% endif %}>
+                                            {{ level }} – {{ verbs }}
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <textarea name="clo[]" rows="3" oninput="lockCLOPrefix(this)"
+                                  style="width: 100%; padding: 10px; box-sizing: border-box; resize: vertical;">CLO${rowCounter + 1}: </textarea>
+                    </td>
+                    <td>
+                        <select name="k[]">
+                            <option value="">-</option>
+                            {% for i in k_items %}
+                                <option value="{{ i.0 }}" title="{{ i.1|default_if_none:''|escape }}">{{ i.0 }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="s[]">
+                            <option value="">-</option>
+                            {% for i in s_items %}
+                                <option value="{{ i.0 }}" title="{{ i.1|default_if_none:''|escape }}">{{ i.0 }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="e[]">
+                            <option value="">-</option>
+                            {% for i in e_items %}
+                                <option value="{{ i.0 }}" title="{{ i.1|default_if_none:''|escape }}">{{ i.0 }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="c[]">
+                            <option value="">-</option>
+                            {% for i in c_items %}
+                                <option value="{{ i.0 }}" title="{{ i.1|default_if_none:''|escape }}">{{ i.0 }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td><button type="button" class="delete-btn" onclick="deleteCLORow(${rowCounter})">Del</button></td>
+                `;
+                rowCounter++;
+                updateCLOLabels();
+                // Recalculate scores when selects change
+                row.querySelectorAll('select').forEach(sel => {
+                    sel.addEventListener('change', recalculateScores);
+                });
+                recalculateScores();
+            };
+
+            window.deleteCLORow = function (index) {
+                const row = document.getElementById('clo-row-' + index);
+                const table = document.querySelector('#clo-table tbody');
+                if (row && table.rows.length > 1) {
+                    row.remove();
+                    updateCLOLabels();
+                    recalculateScores();
+                }
+            };
+
+            window.closeWindow = function () {
+                window.close();
+            };
+
+            {% if clo_list|length == 0 %}
+            addCLORow();
+            {% endif %}
+        });
+
+        function calculateBloomScore() {
+            const bloomDropdowns = document.querySelectorAll('select[name="bloom[]"]');
+            let maxScore = 0;
+            const bloomScores = {
+                'Remember': 1, 'Understand': 2, 'Apply': 3,
+                'Analyze': 4, 'Evaluate': 5, 'Create': 6,
+                'Receiving': 1, 'Responding': 2, 'Valuing': 3,
+                'Organization': 4, 'Characterization': 5,
+                'Imitation': 1, 'Manipulation': 2, 'Precision': 3,
+                'Articulation': 4, 'Naturalization': 5,
+            };
+
+            bloomDropdowns.forEach(sel => {
+                const score = bloomScores[sel.value] || 0;
+                if (score > maxScore) maxScore = score;
+            });
+
+            document.getElementById('bloom-score-cell').innerText = maxScore;
+        }
+
+        function calculateKSECPercents() {
+            const kTotal = {{ k_items|length }};
+            const sTotal = {{ s_items|length }};
+            const eTotal = {{ e_items|length }};
+            const cTotal = {{ c_items|length }};
+
+            // Use Set to avoid counting duplicates
+            const kSet = new Set();
+            const sSet = new Set();
+            const eSet = new Set();
+            const cSet = new Set();
+
+            document.querySelectorAll('select[name="k[]"]').forEach(sel => {
+                if (sel.value) kSet.add(sel.value);
+            });
+            document.querySelectorAll('select[name="s[]"]').forEach(sel => {
+                if (sel.value) sSet.add(sel.value);
+            });
+            document.querySelectorAll('select[name="e[]"]').forEach(sel => {
+                if (sel.value) eSet.add(sel.value);
+            });
+            document.querySelectorAll('select[name="c[]"]').forEach(sel => {
+                if (sel.value) cSet.add(sel.value);
+            });
+
+            const kPercent = kTotal ? Math.round((kSet.size / kTotal) * 100) : 0;
+            const sPercent = sTotal ? Math.round((sSet.size / sTotal) * 100) : 0;
+            const ePercent = eTotal ? Math.round((eSet.size / eTotal) * 100) : 0;
+            const cPercent = cTotal ? Math.round((cSet.size / cTotal) * 100) : 0;
+
+            document.getElementById('k-percent-cell').innerText = kPercent + '%';
+            document.getElementById('s-percent-cell').innerText = sPercent + '%';
+            document.getElementById('e-percent-cell').innerText = ePercent + '%';
+            document.getElementById('c-percent-cell').innerText = cPercent + '%';
+        }
+
+        // Recalculate all summary cells
+        function recalculateScores() {
+            calculateBloomScore();
+            calculateKSECPercents();
+        }
+
+        // Attach change listeners on load
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('select').forEach(sel => {
+                sel.addEventListener('change', recalculateScores);
+            });
+            recalculateScores();
+        });
+    </script>
+</head>
+<body>
+    {% if messages %}
+    <script>
+        {% for message in messages %}
+            alert("{{ message|escapejs }}");
+        {% endfor %}
+    </script>
+    {% endif %}
+    <h2 style="text-align: center;">CLO-KSEC Mapping</h2>
+    <h3 style="text-align: center;">
+        <div>{{ curriculum.name }}</div>
+        <div>Course: {{ course.course_code }} - {{ course.course_name }}</div>
+    </h3>
+
+    <form method="POST" action="{% url 'save_clo_ksec_map' curriculum_id=curriculum.id course_id=course.id %}"
+        onsubmit="document.getElementById('save-db-btn')?.setAttribute('disabled', 'disabled');">
+        {% csrf_token %}
+
+        <div style="text-align: center; margin: 12px 0;">
+            <textarea name="course_description" rows="4" autofocus
+                style="width: 40%; padding: 10px; box-sizing: border-box; resize: vertical; white-space: pre-wrap;"
+                oninput="lockPrefix(this)"
+                onfocus="lockPrefix(this)">{{ course_description|default_if_none:''|striptags }}</textarea>
+        </div>
+
+        <div class="ksec-summary" style="text-align: left; margin: 16px;">
+            <strong>Selected K/S/E/C items for this course:</strong>
+            <ul>
+                {% for i in k_items %}<li><strong>{{ i.0 }}</strong>: {{ i.1 }}</li>{% endfor %}
+                {% for i in s_items %}<li><strong>{{ i.0 }}</strong>: {{ i.1 }}</li>{% endfor %}
+                {% for i in e_items %}<li><strong>{{ i.0 }}</strong>: {{ i.1 }}</li>{% endfor %}
+                {% for i in c_items %}<li><strong>{{ i.0 }}</strong>: {{ i.1 }}</li>{% endfor %}
+            </ul>
+        </div>
+
+        <table id="clo-table">
+            <thead>
+                <tr>
+                    <th class="index-col">No.</th>
+                    <th class="bloom-col">Bloom's Taxonomy Levels</th>
+                    <th>Course Learning Outcomes</th>
+                    <th>K</th>
+                    <th>S</th>
+                    <th>E</th>
+                    <th>C</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for clo in clo_list %}
+                <tr id="clo-row-{{ forloop.counter0 }}">
+                    <td class="index-col">{{ forloop.counter }}<input type="hidden" name="index[]" value="{{ forloop.counter }}"></td>
+                    <td class="bloom-col">
+                        <select name="bloom[]">
+                            <option value="">-</option>
+                            {% for domain, levels in bloom_domains.items %}
+                                <optgroup label="{{ domain }}">
+                                    {% for level, verbs in levels %}
+                                        <option value="{{ level }}" {% if clo.bloom == level %}selected{% endif %}>
+                                            {{ level }} – {{ verbs }}
+                                        </option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <textarea name="clo[]" rows="3" oninput="lockCLOPrefix(this)"
+                                  placeholder="Enter the CLO after CLO1:"
+                                  style="width: 100%; padding: 10px; box-sizing: border-box; resize: vertical;">{{ clo.clo|default_if_none:''|safe }}</textarea>
+                    </td>
+                    <td>
+                        <select name="k[]">
+                            <option value="">-</option>
+                            {% for i in k_items %}
+                                <option value="{{ i.0 }}" title="{{ i.1 }}" {% if clo.k == i.0 %}selected{% endif %}>{{ i.0 }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="s[]">
+                            <option value="">-</option>
+                            {% for i in s_items %}
+                                <option value="{{ i.0 }}" title="{{ i.1 }}" {% if clo.s == i.0 %}selected{% endif %}>{{ i.0 }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="e[]">
+                            <option value="">-</option>
+                            {% for i in e_items %}
+                                <option value="{{ i.0 }}" title="{{ i.1 }}" {% if clo.e == i.0 %}selected{% endif %}>{{ i.0 }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="c[]">
+                            <option value="">-</option>
+                            {% for i in c_items %}
+                                <option value="{{ i.0 }}" title="{{ i.1 }}" {% if clo.c == i.0 %}selected{% endif %}>{{ i.0 }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td><button type="button" class="delete-btn" onclick="deleteCLORow({{ forloop.counter0 }})">Del</button></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tr style="background-color: #f0f8ff; font-weight: bold;">
+                <td colspan="2" style="text-align: right;">Maximum Bloom level:</td>
+                <td id="bloom-score-cell" colspan="6" style="text-align: left;"></td>
+            </tr>
+            <tr style="background-color: #fdf5e6; font-weight: bold;">
+                <td colspan="2" style="text-align: right;">K coverage:</td>
+                <td id="k-percent-cell" colspan="6" style="text-align: left;"></td>
+            </tr>
+            <tr style="background-color: #fdf5e6; font-weight: bold;">
+                <td colspan="2" style="text-align: right;">S coverage:</td>
+                <td id="s-percent-cell" colspan="6" style="text-align: left;"></td>
+            </tr>
+            <tr style="background-color: #fdf5e6; font-weight: bold;">
+                <td colspan="2" style="text-align: right;">E coverage:</td>
+                <td id="e-percent-cell" colspan="6" style="text-align: left;"></td>
+            </tr>
+            <tr style="background-color: #fdf5e6; font-weight: bold;">
+                <td colspan="2" style="text-align: right;">C coverage:</td>
+                <td id="c-percent-cell" colspan="6" style="text-align: left;"></td>
+            </tr>
+        </table>
+
+        <div>
+            <button type="button" class="add-btn" onclick="addCLORow()">+ Add item</button>
+            {% if readonly %}
+                <!-- View mode: disabled until saved to session -->
+                <button type="submit" class="save-btn disabled" id="save-db-btn" disabled>📂 Save to database</button>
+            {% else %}
+                <!-- Edit mode: enabled -->
+                <button type="submit" class="save-btn" id="save-db-btn">📂 Save to database</button>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if readonly %}
+    <form id="session-form" method="POST" action="{% url 'save_clo_ksec_to_session' curriculum_id=curriculum.id course_id=course.id %}">
+        {% csrf_token %}
+    
+        <input type="password" name="session_password" placeholder="Enter password to save to session"
+            style="margin: 8px 0; padding: 6px; width: 300px; display: block;" required>
+    
+        <input type="hidden" name="course_description" id="session_description">
+        <div id="session_clo_inputs"></div>
+    
+        <button type="submit" class="save-btn">💾 Save to session</button>
+    </form>
+    
+    <script>
+        const sessionForm = document.getElementById('session-form');
+        sessionForm.addEventListener('submit', function (e) {
+            const desc = document.querySelector('textarea[name="course_description"]').value;
+            document.getElementById('session_description').value = desc;
+    
+            const inputDiv = document.getElementById('session_clo_inputs');
+            inputDiv.innerHTML = '';
+    
+            ['bloom[]', 'clo[]', 'k[]', 's[]', 'e[]', 'c[]'].forEach(name => {
+                document.querySelectorAll(`[name="${name}"]`).forEach(el => {
+                    const clone = document.createElement('input');
+                    clone.type = 'hidden';
+                    clone.name = name;
+                    clone.value = el.value;
+                    inputDiv.appendChild(clone);
+                });
+            });
+    
+            // Enable "Save to database" button after saving to session
+            setTimeout(() => {
+                const dbBtn = document.getElementById('save-db-btn');
+                if (dbBtn) {
+                    dbBtn.removeAttribute('disabled');
+                    dbBtn.classList.remove('disabled');
+                }
+            }, 300);
+        });
+    </script>
+    {% endif %}
+
+    {% if not readonly %}
+    <form method="POST" action="{% url 'reset_clo_ksec_map' curriculum_id=curriculum.id course_id=course.id %}" onsubmit="return confirm('Are you sure you want to reset this table?')">
+        {% csrf_token %}
+        <button type="submit" class="reset-btn">♻️ Reset table</button>
+    </form>
+    {% endif %}
+
+    <button class="close-btn" onclick="closeWindow()">🔙 Close this window</button>
+
+    {% if readonly and session_saved %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dbBtn = document.getElementById('save-db-btn');
+            if (dbBtn) {
+                dbBtn.removeAttribute('disabled');
+                dbBtn.classList.remove('disabled');
+            }
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

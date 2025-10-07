@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edit {{ type_name }}</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 30px;
+            background-color: #f7f9fc;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #e0e7ff;
+        }
+        th.narrow-column, td.narrow-column {
+            width: 80px;
+        }
+        th.select-column, td.select-column {
+            width: 220px;
+        }
+        th.code-column, td.code-column {
+            width: 100px;
+        }
+        th.control-column, td.control-column {
+            width: 120px;
+        }
+        td input[type="text"], select, textarea {
+            width: 100%;
+            padding: 6px;
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: both;
+            height: 60px;
+        }
+        .footer-buttons {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+            font-size: 14px;
+        }
+        .add-btn { background-color: #4CAF50; }
+        .save-btn { background-color: #2196F3; }
+        .close-btn { background-color: #e53935; }
+        .arrow-btn { margin: 0 2px; }
+    </style>
+    <script>
+        function updateAllIndexes() {
+            const rows = document.querySelectorAll("#item-table tbody tr");
+            const ksecType = document.getElementById("ksec_type").value;
+            rows.forEach((row, index) => {
+                row.cells[0].innerText = index + 1;
+                const select = row.querySelector("select");
+                const input = row.querySelector("textarea");
+                const hidden = row.querySelector("input[type='hidden']");
+                const codeCell = row.querySelector(".code-cell");
+                if (select) select.name = `item_type_${index}`;
+                if (input) input.name = `item_${index}`;
+                if (hidden) hidden.name = `item_id_${index}`;
+                if (select && codeCell) {
+                    const type = select.value || 'GE';
+                    codeCell.textContent = `${type}(${ksecType})${index + 1}`;
+                }
+            });
+            document.getElementById("total_items").value = rows.length;
+        }
+
+        function addRow() {
+            const table = document.querySelector("#item-table tbody");
+            const rowCount = table.rows.length;
+            const ksecType = document.getElementById("ksec_type").value;
+            const newRow = table.insertRow();
+            newRow.innerHTML = `
+                <td class="narrow-column">${rowCount + 1}</td>
+                <td class="select-column">
+                    <select name="item_type_${rowCount}" onchange="updateAllIndexes()">
+                        <option value="GE">GE</option>
+                        <option value="CE">CE</option>
+                    </select>
+                </td>
+                <td class="code-column code-cell"></td>
+                <td>
+                    <input type="hidden" name="item_id_${rowCount}" value="">
+                    <textarea name="item_${rowCount}"></textarea>
+                </td>
+                <td class="control-column">
+                    <button type="button" class="arrow-btn" onclick="moveUp(this)">▲</button>
+                    <button type="button" class="arrow-btn" onclick="moveDown(this)">▼</button>
+                    <button type="button" onclick="deleteRow(this)">Delete</button>
+                </td>
+            `;
+            updateAllIndexes();
+        }
+
+        function deleteRow(button) {
+            const row = button.closest("tr");
+            row.remove();
+            updateAllIndexes();
+        }
+
+        function moveUp(button) {
+            const row = button.closest("tr");
+            const prev = row.previousElementSibling;
+            if (prev) {
+                row.parentNode.insertBefore(row, prev);
+                updateAllIndexes();
+            }
+        }
+
+        function moveDown(button) {
+            const row = button.closest("tr");
+            const next = row.nextElementSibling;
+            if (next) {
+                row.parentNode.insertBefore(next, row);
+                updateAllIndexes();
+            }
+        }
+
+        function closeWindow() {
+            window.close();
+        }
+
+        window.onload = updateAllIndexes;
+    </script>
+</head>
+<body>
+<h2>Edit {{ type_name }}</h2>
+<input type="hidden" id="ksec_type" value="{{ type }}">
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" id="total_items" name="total_items" value="{{ items|length }}">
+
+    <table id="item-table">
+        <thead>
+        <tr>
+            <th class="narrow-column">No.</th>
+            <th class="select-column">Type (General/Core Education)</th>
+            <th class="code-column">Code</th>
+            <th>Details</th>
+            <th class="control-column">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in items %}
+            <tr>
+                <td class="narrow-column">{{ forloop.counter }}</td>
+                <td class="select-column">
+                    <select name="item_type_{{ forloop.counter0 }}" {% if access_mode != 'edit' %}disabled{% endif %} onchange="updateAllIndexes()">
+                        <option value="GE" {% if item.category_type == 'GE' %}selected{% endif %}>GE</option>
+                        <option value="CE" {% if item.category_type == 'CE' %}selected{% endif %}>CE</option>
+                    </select>
+                </td>
+                <td class="code-column code-cell"></td>
+                <td>
+                    <input type="hidden" name="item_id_{{ forloop.counter0 }}" value="{{ item.id }}">
+                    <textarea name="item_{{ forloop.counter0 }}" {% if access_mode != 'edit' %}readonly{% endif %}>{{ item.description }}</textarea>
+                </td>
+                <td class="control-column">
+                    {% if access_mode == 'edit' %}
+                    <button type="button" class="arrow-btn" onclick="moveUp(this)">▲</button>
+                    <button type="button" class="arrow-btn" onclick="moveDown(this)">▼</button>
+                    <button type="button" onclick="deleteRow(this)">Del</button>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer-buttons">
+        {% if access_mode == 'edit' %}
+            <button type="button" class="btn add-btn" onclick="addRow()">➕ Add Item</button>
+            <button type="submit" class="btn save-btn">💾 Save</button>
+        {% endif %}
+        <button type="button" class="btn close-btn" onclick="closeWindow()">🔙 Close this window</button>
+    </div>
+</form>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+  <h1>Welcome to the Admin Dashboard</h1>
+
+  <div style="margin: 1em 0;">
+    <a href="{% url 'sync_real_to_example' %}" class="button default" style="padding: 10px 15px; background-color: #28a745; color: white; border-radius: 5px; text-decoration: none;">
+      🔄 Sync real → example
+    </a>
+  </div>
+
+  {{ block.super }}
+{% endblock %}

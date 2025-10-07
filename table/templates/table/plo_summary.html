@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>📘 Summary of Courses and CLOs Related to Each PLO</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 30px; }
+        th, td { border: 1px solid #444; padding: 8px; text-align: left; vertical-align: top; }
+        th { background-color: #e0e0f8; }
+        h2 { margin-top: 2rem; color: darkblue; }
+        .no-clo { color: gray; }
+        ul { margin: 0; padding-left: 1.2em; }
+        .ksec-label { font-weight: bold; margin-top: 6px; display: inline-block; color: #333; }
+
+        /* ✅ Blue text */
+        .text-blue { color: blue; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<h1>📘 Summary of Courses and CLOs Related to Each PLO</h1>
+<h3>Curriculum: {{ curriculum.name }}</h3>
+
+{% for plo_tag, item in summary.items %}
+    <h2>{{ item.description }}</h2>
+    <p><strong>Number of Courses:</strong> {{ item.course_count }} |
+       <strong>Total Credits:</strong> {{ item.total_credits }}</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 120px; white-space: nowrap;">Course Code</th>
+                <th>Course Name</th>
+                <th>List of CLOs</th>
+                <th>K/S/E/C (Code + Description)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if item.courses %}
+                {% for course in item.courses %}
+                    <tr>
+                        <td>{{ course.course_code }}</td>
+                        <td>{{ course.course_name|safe }}</td>
+                        <td>
+                            {% if course.clos %}
+                                <ul>
+                                    {% for clo in course.clos %}
+                                        <li>{{ clo|safe }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <span class="no-clo">–</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if course.ksec_grouped %}
+                                {% for category, items in course.ksec_grouped.items %}
+                                    {% if items %}
+                                        <div class="ksec-label">
+                                            {{ category }}:
+                                            {% if course.clo_summary %}
+                                                {% if category == "K" %}
+                                                    <span class="text-blue">[{{ course.clo_summary.k_percent|floatformat:1 }}%]</span>
+                                                {% endif %}
+                                                {% if category == "S" %}
+                                                    <span class="text-blue">[{{ course.clo_summary.s_percent|floatformat:1 }}%]</span>
+                                                {% endif %}
+                                                {% if category == "E" %}
+                                                    <span class="text-blue">[{{ course.clo_summary.e_percent|floatformat:1 }}%]</span>
+                                                {% endif %}
+                                                {% if category == "C" %}
+                                                    <span class="text-blue">[{{ course.clo_summary.c_percent|floatformat:1 }}%]</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                        <ul>
+                                            {% for desc in items %}
+                                                <li>{{ desc }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <span class="no-clo">–</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="4" class="no-clo">No courses linked to {{ plo_tag }}</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+{% endfor %}
+
+</body>
+</html>

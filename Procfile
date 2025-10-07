@@ -1,0 +1,1 @@
+﻿web: gunicorn PLO_curriculumDsgn1.wsgi

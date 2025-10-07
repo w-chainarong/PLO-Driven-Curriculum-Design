@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Select {{ type_name }} for {{ semester_str }}</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #e0e7ff;
+            text-align: center;
+        }
+        td input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+        .buttons {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .buttons button {
+            padding: 8px 16px;
+            margin: 0 10px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .save-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .cancel-btn {
+            background-color: #e53935;
+            color: white;
+        }
+    </style>
+    <script>
+        function submitSelection() {
+            {% if access_mode|default:'view' != 'edit' %}
+            alert("🚫 Selection is disabled in view-only mode.");
+            return;
+            {% endif %}
+
+            const checkboxes = document.querySelectorAll('input[name="ksec_items"]:checked');
+            const selected = Array.from(checkboxes).map(cb => cb.value);
+            window.opener.receiveKsecSelection({{ course_id }}, '{{ type }}', selected);
+            window.close();
+        }
+    </script>
+</head>
+<body>
+    <h2>Select {{ type_name }} for {{ semester_str }}</h2>
+
+    {% if items %}
+    <table>
+        <thead>
+            <tr>
+                <th>Select</th>
+                <th>Code</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>
+                    <input type="checkbox" name="ksec_items" value="{{ item.code }}"
+                        {% if access_mode|default:'view' != 'edit' %}disabled{% endif %}>
+                </td>
+                <td>{{ item.code }}</td>
+                <td>{{ item.description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p><i>No items in this category.</i></p>
+    {% endif %}
+
+    <div class="buttons">
+        {% if access_mode|default:'view' == 'edit' %}
+            <button class="save-btn" onclick="submitSelection()">✅ Apply</button>
+        {% endif %}
+        <button class="cancel-btn" onclick="window.close()">❌ Close window</button>
+    </div>
+</body>
+</html>
