@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <title>Credit Analysis Table</title>
     <style>
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         th, td { border: 1px solid #444; padding: 6px; text-align: center; }
         th { background-color: #eee; }
         input[type="number"] { width: 40px; text-align: center; }
@@ -191,6 +191,12 @@ document.addEventListener('DOMContentLoaded', function () {
         {% csrf_token %}
 
         <table id="core-rows-table">
+            <colgroup>
+                <col style="width: 9%;">       <!-- ปุ่ม -->
+                <col style="width: 25%;">      <!-- Category -->
+                <col span="8" style="width: 7.5%;">   <!-- 8 ภาคเรียน -->
+                <col style="width: 6%;">       <!-- Total Credits -->
+            </colgroup>
             <thead>
                 <tr>
                     <th></th>
@@ -209,14 +215,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 </tr>
 
                 <!-- General rows -->
-                {% for row_id, name, credits, total in general_rows %}
+                {% for row_id, name, credits, total, sort_order in general_rows %}
                 <tr id="general-row-{{ forloop.counter0 }}">
                     <td>
                         <button type="button" class="delete-btn" onclick="deleteGeneralRow({{ forloop.counter0 }})">-</button>
+                        <button type="button" class="move-up" onclick="moveGeneralRowUp(this)">▲</button>
+                        <button type="button" class="move-down" onclick="moveGeneralRowDown(this)">▼</button>
                     </td>
                     <td>
                         <input type="hidden" name="general_id_{{ forloop.counter0 }}" value="{{ row_id }}">
                         <input type="text" name="general_name_{{ forloop.counter0 }}" value="{{ name }}" class="wide-input">
+                        <input type="hidden" name="general_order_{{ row_id }}" value="{{ sort_order }}">
                     </td>
                     {% for credit in credits %}
                     <td>
@@ -242,14 +251,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 </tr>
 
                 <!-- Core rows -->
-                {% for row_id, name, credits, total in core_rows %}
+                {% for row_id, name, credits, total, sort_order in core_rows %}
                 <tr id="row-{{ forloop.counter0 }}">
                     <td>
                         <button type="button" class="delete-btn" onclick="deleteRow({{ forloop.counter0 }})">-</button>
+                        <button type="button" class="move-up" onclick="moveRowUp(this)">▲</button>
+                        <button type="button" class="move-down" onclick="moveRowDown(this)">▼</button>
                     </td>
                     <td>
                         <input type="hidden" name="core_id_{{ forloop.counter0 }}" value="{{ row_id }}">
                         <input type="text" name="core_name_{{ forloop.counter0 }}" value="{{ name }}" class="wide-input">
+                        <input type="hidden" name="core_order_{{ row_id }}" value="{{ sort_order }}">
                     </td>
                     {% for credit in credits %}
                     <td>
@@ -478,6 +490,8 @@ window.deletePLORow = function (idx) {
 // Auto-width for curriculum name input
 document.addEventListener("DOMContentLoaded", function () {
     const input = document.getElementById("curriculum_name");
+    if (!input) return;
+
     const adjustWidth = () => {
         const span = document.createElement("span");
         span.style.visibility = "hidden";
@@ -489,9 +503,82 @@ document.addEventListener("DOMContentLoaded", function () {
         input.style.width = (span.offsetWidth + 30) + "px";
         document.body.removeChild(span);
     };
+
     input.addEventListener("input", adjustWidth);
     adjustWidth();
 });
 </script>
+
+<!-- 🧩 Row reordering (เหมือนเวอร์ชันภาษาไทย) -->
+<script>
+// ---------- Core rows ----------
+function moveRowUp(button) {
+    const row = button.closest('tr');
+    const prev = row.previousElementSibling;
+
+    // ❌ ห้ามเลื่อนผ่าน header “Core Courses”
+    if (prev && !prev.querySelector('strong')) {
+        row.parentNode.insertBefore(row, prev);
+        updateCoreOrderInputs();
+    }
+}
+
+function moveRowDown(button) {
+    const row = button.closest('tr');
+    const next = row.nextElementSibling;
+
+    // ❌ ห้ามเลื่อนลงไปทับ/ผ่าน “Free Electives” หรือ header ต่อไป
+    if (next && !next.querySelector('strong') && !next.querySelector('td strong')) {
+        row.parentNode.insertBefore(next, row);
+        updateCoreOrderInputs();
+    }
+}
+
+function updateCoreOrderInputs() {
+    // เลือกเฉพาะแถว core: id เริ่มด้วย row-
+    const rows = document.querySelectorAll('#core-rows-table tbody tr[id^="row-"]');
+    rows.forEach((row, index) => {
+        const hiddenInput = row.querySelector('input[name^="core_order_"]');
+        if (hiddenInput) {
+            hiddenInput.value = index + 1; // ลำดับใหม่ (เริ่ม 1)
+        }
+    });
+}
+
+// ---------- General rows ----------
+function moveGeneralRowUp(button) {
+    const row = button.closest('tr');
+    const prev = row.previousElementSibling;
+
+    // ❌ ห้ามเลื่อนผ่าน header “General Education”
+    if (prev && !prev.querySelector('strong')) {
+        row.parentNode.insertBefore(row, prev);
+        updateGeneralOrderInputs();
+    }
+}
+
+function moveGeneralRowDown(button) {
+    const row = button.closest('tr');
+    const next = row.nextElementSibling;
+
+    // ❌ ห้ามเลื่อนผ่าน header "Core Courses" หรือ free-row
+    if (next && !next.querySelector('strong') && !next.querySelector('td strong')) {
+        row.parentNode.insertBefore(next, row);
+        updateGeneralOrderInputs();
+    }
+}
+
+function updateGeneralOrderInputs() {
+    const rows = document.querySelectorAll('tr[id^="general-row-"]');
+    rows.forEach((row, index) => {
+        const hiddenInput = row.querySelector('input[name^="general_order_"]');
+        if (hiddenInput) {
+            hiddenInput.value = index + 1; // ลำดับใหม่ (เริ่ม 1)
+        }
+    });
+}
+</script>
 </body>
 </html>
+
+

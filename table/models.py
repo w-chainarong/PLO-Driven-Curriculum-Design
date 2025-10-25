@@ -32,6 +32,9 @@ class CreditRow(models.Model):
 
     name = models.CharField(max_length=200)
     row_type = models.CharField(max_length=10, choices=ROW_TYPES)
+    # ✅ Add this line
+    sort_order = models.PositiveIntegerField(default=0, help_text="Used to maintain row order within each category.")
+
     credits_sem1 = models.IntegerField(default=0)
     credits_sem2 = models.IntegerField(default=0)
     credits_sem3 = models.IntegerField(default=0)
@@ -92,7 +95,7 @@ class YLOPerPLOSemester(models.Model):
 
 class KSECItem(models.Model):
     curriculum = models.ForeignKey(Curriculum, on_delete=models.CASCADE)
-    semester = models.IntegerField(default=0)
+    semester = models.IntegerField()
     type = models.CharField(
         max_length=1,
         choices=[

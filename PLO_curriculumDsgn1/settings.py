@@ -29,12 +29,9 @@ DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    'plo-eng-curriculum.up.railway.app',  # ✅ เพิ่มตรงนี้
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://plo-eng-curriculum.up.railway.app',  # ✅ เพิ่มตรงนี้
-]
+CSRF_TRUSTED_ORIGINS = []
 # Application definition
 
 INSTALLED_APPS = [

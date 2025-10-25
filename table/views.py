@@ -2,26 +2,27 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Sum
 from .models import CreditRow, Course
 import re
-from django.contrib import messages
+from django.contrib import messages  # 🔥 เพิ่มไว้ด้านบนด้วยนะครับ (import messages)
 from django.http import FileResponse, HttpResponse, HttpResponseNotFound
 import zipfile
 import os
 import io
 from .models import Curriculum, CreditRow, Course, YLOPerPLOSemester, KSECItem
-from .models import CLO, CLOSummary
+from .models import CLO, CLOSummary  # ด้านบนของไฟล์ต้อง import ด้วย
 from django.http import HttpResponse
 import matplotlib.pyplot as plt
 import numpy as np
 from io import BytesIO
+
+from django.shortcuts import render, redirect, get_object_or_404
+from .models import Curriculum
+
 
 # ---------- UI headers (English) ----------
 headers = [
     'Year 1/1', 'Year 1/2', 'Year 2/1', 'Year 2/2',
     'Year 3/1', 'Year 3/2', 'Year 4/1', 'Year 4/2'
 ]
-
-from django.shortcuts import render, redirect, get_object_or_404
-from .models import Curriculum
 
 def curriculum_select(request):
     if request.method == 'POST':
@@ -105,12 +106,17 @@ def credit_table(request, curriculum_id):
                     except CreditRow.DoesNotExist:
                         continue
                 else:
+                    current_count = CreditRow.objects.using('real').filter(
+                        curriculum=curriculum, row_type=row_type
+                    ).count()
+
                     CreditRow.objects.using('real').create(
                         curriculum=curriculum,
                         name=name,
                         row_type=row_type,
+                        sort_order=current_count + 1,  # ✅ เพิ่มบรรทัดนี้เพื่อกำหนดลำดับ
                         **{f'credits_sem{i+1}': credits[i] for i in range(8)}
-                    )
+                    )        
 
         # delete rows not present in POST
         delete_removed_rows('plo', ['plo_id'])
@@ -124,6 +130,23 @@ def credit_table(request, curriculum_id):
         save_rows('general', 'general_name_new', 'general_credit_new')
         save_rows('core', 'core_name_new', 'core_credit_new')
         save_rows('plo', 'plo_name_new', 'plo_credit_new')
+        
+        # ✅ Update sort_order for Core & General (same as Thai version)
+        def update_sort_order(row_type, prefix):
+            for key in request.POST:
+                if key.startswith(f'{prefix}_order_'):
+                    try:
+                        row_id = int(key.replace(f'{prefix}_order_', ''))
+                        new_order = int(request.POST[key])
+                        CreditRow.objects.using('real').filter(
+                            id=row_id, curriculum=curriculum, row_type=row_type
+                        ).update(sort_order=new_order)
+                    except ValueError:
+                        continue
+
+        # ✅ Apply for both sections
+        update_sort_order('core', 'core')
+        update_sort_order('general', 'general')
 
         # sync YLO with PLO/Course
         from .views_ylo import update_ylo_for_curriculum
@@ -144,8 +167,14 @@ def credit_table(request, curriculum_id):
 
     all_rows = CreditRow.objects.using(db).filter(curriculum=curriculum)
 
-    general_rows = [(row.id, row.name, row.credit_list(), row.total_credits()) for row in all_rows.filter(row_type='general')]
-    core_rows = [(row.id, row.name, row.credit_list(), row.total_credits()) for row in all_rows.filter(row_type='core')]
+    general_rows = [
+        (row.id, row.name, row.credit_list(), row.total_credits(), row.sort_order)
+        for row in all_rows.filter(row_type='general').order_by('sort_order', 'id')
+    ]
+    core_rows = [
+        (row.id, row.name, row.credit_list(), row.total_credits(), row.sort_order)
+        for row in all_rows.filter(row_type='core').order_by('sort_order', 'id')
+    ]
     plo_rows = [(row.id, row.name, row.credit_list(), row.total_credits()) for row in all_rows.filter(row_type='plo').order_by('id')]
     free_elective = all_rows.filter(row_type='free').first()
     free_elective_tuple = (free_elective.name, free_elective.credit_list(), free_elective.total_credits()) if free_elective else None
@@ -316,7 +345,8 @@ def sync_curriculum_real_to_example(request, curriculum_id):
             credits_sem5=row.credits_sem5,
             credits_sem6=row.credits_sem6,
             credits_sem7=row.credits_sem7,
-            credits_sem8=row.credits_sem8
+            credits_sem8=row.credits_sem8,
+            sort_order=row.sort_order,  # ✅ add this line
         )
         real_to_default_creditrow[row.id] = new_row
 
@@ -436,7 +466,8 @@ def sync_curriculum_example_to_real(request, curriculum_id):
             credits_sem5=row.credits_sem5,
             credits_sem6=row.credits_sem6,
             credits_sem7=row.credits_sem7,
-            credits_sem8=row.credits_sem8
+            credits_sem8=row.credits_sem8,
+            sort_order=row.sort_order,  # ✅ add this line
         )
         example_to_real_creditrow[row.id] = new_row
 
@@ -542,25 +573,39 @@ def download_database(request, db_name):
 
     return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=f'{db_name}.sqlite3')
 
+def extract_plo_tag(name):
+    """
+    Extracts the main PLO tag such as 'PLO1' from strings like
+    'PLO1: Apply knowledge...' or 'PLO1, PLO2'.
+    Returns 'PLO1', 'PLO2', etc.
+    """
+    match = re.match(r'^(PLO\d+)', name.strip(), re.IGNORECASE)
+    return match.group(1).upper() if match else name.strip()
+
+
 def sync_plo_credits_to_creditrow(curriculum):
     # update only in real (edit mode)
     plo_rows = CreditRow.objects.using('real').filter(curriculum=curriculum, row_type='plo')
+
     for row in plo_rows:
-        if ':' in row.name:
-            plo_tag = row.name.split(':')[0].strip()
-        else:
-            plo_tag = row.name.strip()
+        # ✅ ใช้ extract_plo_tag() ที่เราสร้างไว้ตอนต้น
+        plo_tag = extract_plo_tag(row.name)
+
+        # ✅ ใช้ regex แบบ boundary ป้องกัน PLO1 จับ PLO10–13
+        pattern = rf'(^|[ ,;:]){re.escape(plo_tag)}([ ,;:]|$)'
+
         new_credits = []
         for sem in range(1, 9):
             total = Course.objects.using('real').filter(
                 curriculum=curriculum,
-                semester=sem,
-                plo__startswith=plo_tag
-            ).aggregate(Sum('credits'))['credits__sum'] or 0
+                semester=sem
+            ).filter(plo__iregex=pattern).aggregate(Sum('credits'))['credits__sum'] or 0
             new_credits.append(total)
+
         for i, val in enumerate(new_credits):
             setattr(row, f'credits_sem{i+1}', val)
         row.save(using='real')
+
 
 def debug_print_plo_credits(curriculum):
     plo_rows = CreditRow.objects.using('real').filter(curriculum=curriculum, row_type='plo')
@@ -580,7 +625,7 @@ def plo_graph_from_creditrow(request, curriculum_id):
     plo_labels = []
     plo_values = []
     for row in plo_rows:
-        tag = row.name.split(':')[0].strip()
+        tag = extract_plo_tag(row.name)
         plo_labels.append(tag)
         plo_values.append([
             row.credits_sem1, row.credits_sem2, row.credits_sem3, row.credits_sem4,
